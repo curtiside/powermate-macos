@@ -3,7 +3,7 @@ SWFLAGS   = -O -swift-version 5
 MIN_MACOS = 11.0
 BUILD     = build
 BIN       = $(BUILD)/powermate
-ID        = com.cidemaxio.powermate
+ID        = io.github.curtiside.powermate
 
 .PHONY: all build run list watch install uninstall setup-karabiner clean
 

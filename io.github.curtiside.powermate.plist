@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>Label</key>
-	<string>com.cidemaxio.powermate</string>
+	<string>io.github.curtiside.powermate</string>
 	<key>Program</key>
 	<string>/usr/local/bin/powermate</string>
 	<key>RunAtLoad</key>

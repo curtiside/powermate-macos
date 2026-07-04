@@ -36,7 +36,7 @@ make install
 Installs `/usr/local/bin/powermate` + a LaunchAgent so the knob works at every
 login. Grant Input Monitoring to `/usr/local/bin/powermate`, then:
 ```sh
-launchctl kickstart -k gui/$(id -u)/com.cidemaxio.powermate
+launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate
 ```
 Uninstall with `make uninstall`.
 
