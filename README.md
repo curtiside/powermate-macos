@@ -40,7 +40,23 @@ different CoreBluetooth input path). Contributions welcome if you have one to te
 - Xcode Command Line Tools (`swiftc`) to build
 - **Input Monitoring** permission for the binary (macOS gates HID input)
 
-## Build & try
+## Install with Homebrew (recommended)
+```sh
+brew install curtiside/tap/powermate
+brew services start powermate     # run now + at every login
+```
+Grant **Input Monitoring** to `$(brew --prefix)/opt/powermate/bin/powermate`
+(System Settings → Privacy & Security → Input Monitoring), then
+`brew services restart powermate`. Logs: `$(brew --prefix)/var/log/powermate.log`.
+Homebrew builds from source locally, so there's no Gatekeeper friction.
+
+Config works the same as below (`~/.config/powermate/powermate.conf`); apply
+changes with `brew services restart powermate`. Upgrades: `brew upgrade`.
+
+> Installing with Homebrew? Skip the `make install` section — running both
+> copies would double every knob action.
+
+## Build & try (from source)
 ```sh
 make            # builds a universal, ad-hoc-signed binary at build/powermate
 make run        # run it: turn the knob (volume), press (mute)
