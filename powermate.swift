@@ -369,10 +369,12 @@ func startKnob(vid: Int = GRIFFIN_VID, pid: Int = POWERMATE_PID) {
     if openRes != kIOReturnSuccess {
         logErr(String(format: "Could not open HID (0x%08x). Grant Input Monitoring: System Settings > Privacy & Security > Input Monitoring.", openRes))
     }
-    if watchMode { print(String(format: "Watching VID=0x%04x PID=0x%04x — interact with the device. Ctrl-C to stop.", vid, pid)) }
+    // Banners go to stderr: logErr is unbuffered, while print/stdout is
+    // block-buffered when redirected to the launchd log file.
+    if watchMode { logErr(String(format: "Watching VID=0x%04x PID=0x%04x — interact with the device. Ctrl-C to stop.", vid, pid)) }
     else {
         let dev = cfg.device.map { "\"\($0)\"" } ?? "the default output"
-        print("powermate v\(VERSION) active (target=\(dev)). turn_cw=\(cfg.action("turn_cw")) click=\(cfg.action("click")) … Ctrl-C to stop.")
+        logErr("powermate v\(VERSION) active (target=\(dev)). turn_cw=\(cfg.action("turn_cw")) click=\(cfg.action("click")) … Ctrl-C to stop.")
     }
     CFRunLoopRun()
 }
