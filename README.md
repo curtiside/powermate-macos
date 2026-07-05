@@ -76,8 +76,37 @@ classic knob, no config required.
 make config     # copies powermate.conf.example -> ~/.config/powermate/powermate.conf
                 # (won't overwrite an existing one)
 ```
-Edit it and restart the agent: `launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate`.
-Override the location with `POWERMATE_CONFIG=/path/to/file`.
+
+### Making and deploying a config change
+
+The config is read **once, at startup** — the running agent does not watch the
+file, so an edit does nothing until you restart it:
+
+```sh
+# 1. edit
+$EDITOR ~/.config/powermate/powermate.conf
+
+# 2. deploy — restart the agent so it re-reads the config
+launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate
+
+# 3. verify — the startup banner echoes the loaded mappings, and any typo'd
+#    key/action/value is warned about here (bad entries are ignored, never fatal)
+tail ~/Library/Logs/powermate.log
+```
+
+To watch your change work in real time, set `log_level = debug` in the same
+edit, restart, and `tail -f` the log while you use the knob — every gesture is
+logged with the action it resolved to (unmapped gestures included, marked
+`unmapped`). Set it back to `info` and restart again when you're done.
+
+Notes:
+- `make install` also restarts the agent (bootout + bootstrap), so a config
+  edit made before an upgrade is picked up by the install itself.
+- A one-off test without touching your real config:
+  `POWERMATE_CONFIG=/path/to/test.conf ./build/powermate` in a terminal
+  (Ctrl-C to stop; the installed agent keeps running alongside it).
+- Deleting the config file (then restarting) returns the knob to the built-in
+  defaults — turn = volume, click = mute, instant click.
 
 **Gestures** (config keys): `turn_cw` `turn_ccw` `click` `double_click`
 `long_press` `press_turn_cw` `press_turn_ccw`
