@@ -1,7 +1,8 @@
 # powermate-macos
 
-A tiny, **driver-free** way to use a **Griffin PowerMate** USB knob as a volume
-control on modern macOS (Apple Silicon & Intel).
+A tiny, **driver-free** way to use a **Griffin PowerMate** USB knob to control
+volume, mute, media, and output-device switching on modern macOS (Apple Silicon
+& Intel).
 
 Griffin is long gone and the original PowerMate software is a dead kernel
 extension that won't load on current macOS — so a lot of people have a perfectly
@@ -19,6 +20,14 @@ And with an optional [config file](#gestures--config) you can also map **double-
 track, and switching the output device. By default it controls your **current
 default output device** (and follows you when you switch outputs), so it just
 works. MIT licensed.
+
+**How this differs from other PowerMate tools:** it's fully self-contained — one
+small binary that both reads the knob *and* performs the actions itself, with a
+plain-text config file (no [Hammerspoon](https://www.hammerspoon.org/) or other
+runtime to install and script). The trade-off: a fixed built-in action set (not
+arbitrary scripting) and USB-only. If you want per-app scripting or the Bluetooth
+model, a Hammerspoon-based tool like [cedstrom/powermate-osx](https://github.com/cedstrom/powermate-osx)
+may fit better.
 
 ## Supported hardware
 This targets the **USB (wired) PowerMate** — Griffin VID `0x077d` / PID `0x0410`,
@@ -49,7 +58,9 @@ login. Grant Input Monitoring to `/usr/local/bin/powermate`, then:
 ```sh
 launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate
 ```
-Uninstall with `make uninstall`.
+Uninstall with `make uninstall` (removes the binary and LaunchAgent; your config
+at `~/.config/powermate/` is left in place — `rm -rf ~/.config/powermate` to
+remove it too).
 
 ## Gestures & config
 
@@ -130,12 +141,44 @@ This pairs naturally with the knob: the PowerMate controls volume through the
 audio API (not volume keys), so blocking a device's volume keys **doesn't** affect
 the knob — you get a real volume knob *and* no more surprise volume jumps.
 
+## Troubleshooting
+
+**`make list` / `make watch` doesn't show the knob at all.** The PowerMate is a
+**USB 1.1** device and is surprisingly picky about which port or hub it enumerates
+on — some USB-3 / powered-hub / dock ports won't bring it up (no blue light, or a
+light but no HID device). **Try a different port**, ideally a direct one or a
+plain USB-2 hub, until the light comes on *and* it appears in `make list`.
+
+**The knob is detected but nothing happens.** macOS gates HID input behind
+**Input Monitoring**. Grant it to the right thing — your terminal for `make run`,
+or `/usr/local/bin/powermate` for the installed agent — then restart:
+```sh
+launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate
+```
+
+**Is the agent actually running?**
+```sh
+launchctl print gui/$(id -u)/io.github.curtiside.powermate | grep -E 'state|pid'
+```
+
+**A media action (`play_pause`/`next_track`/`previous_track`) does nothing.**
+These synthesize media keys; if they silently no-op, grant the binary
+**Accessibility** (System Settings → Privacy & Security → Accessibility) and
+restart the agent. Volume/mute/output actions use the audio API and aren't
+affected.
+
+**Config changes aren't taking effect.** The config is read at startup only —
+restart the agent with the `kickstart` command above after editing.
+
 ## How it works / why no kext
 `IOHIDManager` opens the PowerMate (Griffin VID `0x077d`, PID `0x0410`) in
-userspace and receives its input reports directly; rotation deltas and the button
-are mapped to CoreAudio `kAudioDevicePropertyVolumeScalar` / mute on the target
-device. No kernel extension, no system extension, nothing to approve beyond Input
-Monitoring.
+userspace and receives its input reports directly. Gestures (turn, click,
+double-click, long-press, press-and-turn) are decoded from those reports and
+dispatched to built-in actions per your [config](#gestures--config): volume and
+mute via CoreAudio (`kAudioDevicePropertyVolumeScalar` / mute), output switching
+via the default-device property, and media control via synthesized media keys.
+No kernel extension, no system extension, nothing to approve beyond Input
+Monitoring (plus Accessibility only if you use media actions).
 
 ## License
 MIT — see [LICENSE](LICENSE). Not affiliated with Griffin Technology.
