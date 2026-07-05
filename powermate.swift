@@ -333,9 +333,9 @@ func onRotate(_ delta: Int) {
     if buttonDown && (cfg.mapped("press_turn_cw") || cfg.mapped("press_turn_ccw")) {
         pressUsedForTurn = true
         longPressWork?.cancel(); longPressWork = nil
-        run(cfg.action(cw ? "press_turn_cw" : "press_turn_ccw"), magnitude: mag)
+        fire(cw ? "press_turn_cw" : "press_turn_ccw", magnitude: mag)
     } else {
-        run(cfg.action(cw ? "turn_cw" : "turn_ccw"), magnitude: mag)
+        fire(cw ? "turn_cw" : "turn_ccw", magnitude: mag)
     }
 }
 
