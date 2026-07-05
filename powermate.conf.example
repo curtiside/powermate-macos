@@ -29,8 +29,10 @@ double_click_ms = 250
 #   info  — + lifecycle: startup, device connect/disconnect, output switches
 #   debug — + every caught event (timestamped) with the action it resolved
 #           to, including "-> none", so you can verify the driver saw a
-#           gesture even when it's a deliberate no-op. Noisy while turning
-#           (one line per detent) — set it back to info when done debugging.
+#           gesture even when it's a deliberate no-op. Unmapped double_click/
+#           long_press/press_turn are still recognized and logged (marked
+#           "unmapped") without changing behavior. Noisy while turning (one
+#           line per detent) — set it back to info when done debugging.
 log_level = info
 
 # ---- Gesture -> action mappings --------------------------------------------

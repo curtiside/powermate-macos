@@ -194,9 +194,11 @@ restart the agent. Volume/mute/output actions use the audio API and aren't
 affected.
 
 **Is the driver even seeing my knob events?** Set `log_level = debug` in the
-config and restart the agent — every turn, click, double-click, long-press, and
-raw button edge is logged with a timestamp and the action it resolved to, even
-when that action is `none` (set it back to `info` when done):
+config and restart the agent — every turn, click, double-click, long-press,
+press-and-turn, and raw button edge is logged with a timestamp and the action it
+resolved to, even when that action is `none`. **Unmapped** advanced gestures are
+still *recognized and logged* (marked `unmapped`) — they just don't change what
+the knob does. Set it back to `info` when done:
 ```
 14:02:11.482 event: button down
 14:02:11.483 event: click -> none

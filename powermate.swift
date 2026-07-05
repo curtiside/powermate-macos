@@ -280,6 +280,14 @@ var clickHandledOnDown = false
 var pressConsumed = false
 var longPressWork: DispatchWorkItem?
 var pendingClick: DispatchWorkItem?
+// Shadow detection: when double_click / long_press / press_turn are unmapped,
+// their detectors aren't armed (that's what keeps a plain click instant). But
+// at log_level=debug the log must still show what the user physically did —
+// so these track just enough to LOG the recognized gesture, with zero effect
+// on dispatch.
+var lastDownAt: Date?
+var shadowPressTurnLogged = false
+var shadowLongPressWork: DispatchWorkItem?
 
 let advancedClick = cfg.mapped("double_click") || cfg.mapped("long_press")
     || cfg.mapped("press_turn_cw") || cfg.mapped("press_turn_ccw")
@@ -287,6 +295,15 @@ let advancedClick = cfg.mapped("double_click") || cfg.mapped("long_press")
 func onButtonDown() {
     buttonDown = true; pressUsedForTurn = false; longPressFired = false
     clickHandledOnDown = false; pressConsumed = false
+    shadowPressTurnLogged = false
+    // Shadow double-click: no pending-click machinery exists when double_click
+    // is unmapped, but the debug log must still show the physical gesture.
+    // Both clicks have dispatched (or will) individually — log only.
+    if !cfg.mapped("double_click"), let t = lastDownAt,
+       Date().timeIntervalSince(t) * 1000 < Double(cfg.doubleClickMs) {
+        log(.debug, "event: double_click -> none (unmapped; clicks dispatched individually)")
+    }
+    lastDownAt = Date()
     // A second press while a single click is pending IS the double-click:
     // consume it here, on the down edge. (Resolving on the up edge instead
     // would let click-then-hold fire both click and long_press, and would
@@ -303,9 +320,19 @@ func onButtonDown() {
         }
         longPressWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(cfg.longPressMs), execute: w)
+    } else {
+        // Shadow long-press: log-only; never sets longPressFired, so release
+        // handling (and the already-dispatched click) is unaffected.
+        let w = DispatchWorkItem {
+            if buttonDown && !pressUsedForTurn && !pressConsumed && !shadowPressTurnLogged {
+                log(.debug, "event: long_press -> none (unmapped; click already dispatched)")
+            }
+        }
+        shadowLongPressWork = w
+        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(cfg.longPressMs), execute: w)
     }
     // Instant click (mute) when no advanced gestures are configured — preserves
-    // classic feel. Fires even when click=none so log_events shows the no-op.
+    // classic feel. Fires even when click=none so the debug log shows the no-op.
     if !advancedClick {
         clickHandledOnDown = true; fire("click")
     }
@@ -314,6 +341,7 @@ func onButtonDown() {
 func onButtonUp() {
     buttonDown = false
     longPressWork?.cancel(); longPressWork = nil
+    shadowLongPressWork?.cancel(); shadowLongPressWork = nil
     if pressConsumed || clickHandledOnDown || longPressFired || pressUsedForTurn { return }
     // No mapped-click guard here: the pending click must be scheduled even when
     // click=none, both so double_click works with click unmapped and so
@@ -335,6 +363,12 @@ func onRotate(_ delta: Int) {
         longPressWork?.cancel(); longPressWork = nil
         fire(cw ? "press_turn_cw" : "press_turn_ccw", magnitude: mag)
     } else {
+        // Shadow press+turn: recognized and logged once per press even when
+        // unmapped; the turns still dispatch as plain turns below.
+        if buttonDown && !shadowPressTurnLogged {
+            shadowPressTurnLogged = true
+            log(.debug, "event: press_turn -> none (unmapped; turns dispatch as plain turns)")
+        }
         fire(cw ? "turn_cw" : "turn_ccw", magnitude: mag)
     }
 }
@@ -344,6 +378,8 @@ func resetGestureState() {
     longPressFired = false; clickHandledOnDown = false; pressConsumed = false
     longPressWork?.cancel(); longPressWork = nil
     pendingClick?.cancel(); pendingClick = nil
+    shadowLongPressWork?.cancel(); shadowLongPressWork = nil
+    shadowPressTurnLogged = false; lastDownAt = nil
 }
 
 // MARK: - HID
