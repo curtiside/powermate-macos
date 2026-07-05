@@ -24,6 +24,14 @@ step = 0.03
 # long_press_ms: 100–5000. double_click_ms: 100–2000. Out-of-range rejected.
 long_press_ms = 500
 double_click_ms = 250
+# log_level: error | info | debug   (default: info)
+#   error — failures only (can't open HID, etc.); config problems always log
+#   info  — + lifecycle: startup, device connect/disconnect, output switches
+#   debug — + every caught event (timestamped) with the action it resolved
+#           to, including "-> none", so you can verify the driver saw a
+#           gesture even when it's a deliberate no-op. Noisy while turning
+#           (one line per detent) — set it back to info when done debugging.
+log_level = info
 
 # ---- Gesture -> action mappings --------------------------------------------
 # Gestures: turn_cw  turn_ccw  click  double_click  long_press

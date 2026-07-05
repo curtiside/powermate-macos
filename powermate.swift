@@ -27,7 +27,7 @@ import IOKit.hid
 import CoreAudio
 import AppKit
 
-let VERSION = "1.0.0"
+let VERSION = "1.1.0"
 let GRIFFIN_VID = 0x077d
 let POWERMATE_PID = 0x0410
 
@@ -137,11 +137,17 @@ let GESTURES: Set<String> = ["turn_cw", "turn_ccw", "click", "double_click",
 let ACTIONS: Set<String> = ["volume_up", "volume_down", "mute_toggle", "play_pause",
                             "next_track", "previous_track", "output_cycle", "none"]
 
+enum LogLevel: Int, CustomStringConvertible {
+    case error = 0, info = 1, debug = 2
+    var description: String { ["error", "info", "debug"][rawValue] }
+}
+
 final class Config {
     var device: String? = nil
     var step: Float = 0.03
     var longPressMs = 500
     var doubleClickMs = 250
+    var logLevel = LogLevel.info
     var map: [String: String] = [
         "turn_cw": "volume_up", "turn_ccw": "volume_down", "click": "mute_toggle",
         "double_click": "none", "long_press": "none",
@@ -178,6 +184,13 @@ func parseConfig(_ text: String, into cfg: Config) -> [String] {
         case "double_click_ms":
             if let v = Int(val), (100...2000).contains(v) { cfg.doubleClickMs = v }
             else { warnings.append("line \(n + 1): double_click_ms must be 100–2000, got '\(val)' — keeping \(cfg.doubleClickMs)") }
+        case "log_level":
+            switch val.lowercased() {
+            case "error": cfg.logLevel = .error
+            case "info":  cfg.logLevel = .info
+            case "debug": cfg.logLevel = .debug
+            default: warnings.append("line \(n + 1): log_level must be error, info, or debug, got '\(val)' — keeping \(cfg.logLevel)")
+            }
         default:
             if GESTURES.contains(key) {
                 if ACTIONS.contains(val) { cfg.map[key] = val }
@@ -228,10 +241,31 @@ func run(_ action: String, magnitude: Int = 1) {
             let i = outs.firstIndex { $0.0 == cur } ?? -1
             let next = outs[(i + 1) % outs.count]
             setDefaultOutput(next.0)
-            logErr("output_cycle -> \(next.1)")
+            log(.info, "output_cycle -> \(next.1)")
         }
     default: break
     }
+}
+
+// Leveled, timestamped logging. error: failures only (always shown).
+// info (default): + lifecycle — startup, device connect/disconnect, output
+// switches. debug: + every caught event with the action it resolved to.
+// Set via `log_level` in the config.
+let logTimeFmt: DateFormatter = { let f = DateFormatter(); f.dateFormat = "HH:mm:ss.SSS"; return f }()
+// The gate is its own function so the selftest can verify the full
+// message-level x configured-level matrix.
+func shouldLog(_ level: LogLevel, at configured: LogLevel) -> Bool { level.rawValue <= configured.rawValue }
+func log(_ level: LogLevel, _ s: String) {
+    if shouldLog(level, at: cfg.logLevel) { logErr("\(logTimeFmt.string(from: Date())) \(s)") }
+}
+
+// Central gesture dispatch. At log_level=debug every decoded gesture is logged
+// with the action it resolved to — including "none" — so you can prove the
+// driver caught an event even when it deliberately does nothing.
+func fire(_ gesture: String, magnitude: Int = 1) {
+    let action = cfg.action(gesture)
+    log(.debug, "event: \(gesture)\(magnitude > 1 ? " x\(magnitude)" : "") -> \(action)")
+    run(action, magnitude: magnitude)
 }
 
 // MARK: - Gesture state machine
@@ -260,19 +294,20 @@ func onButtonDown() {
     if let p = pendingClick {
         p.cancel(); pendingClick = nil
         pressConsumed = true
-        run(cfg.action("double_click"))
+        fire("double_click")
         return
     }
     if cfg.mapped("long_press") {
         let w = DispatchWorkItem {
-            if buttonDown && !pressUsedForTurn && !pressConsumed { longPressFired = true; run(cfg.action("long_press")) }
+            if buttonDown && !pressUsedForTurn && !pressConsumed { longPressFired = true; fire("long_press") }
         }
         longPressWork = w
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(cfg.longPressMs), execute: w)
     }
-    // Instant click (mute) when no advanced gestures are configured — preserves classic feel.
-    if cfg.mapped("click") && !advancedClick {
-        clickHandledOnDown = true; run(cfg.action("click"))
+    // Instant click (mute) when no advanced gestures are configured — preserves
+    // classic feel. Fires even when click=none so log_events shows the no-op.
+    if !advancedClick {
+        clickHandledOnDown = true; fire("click")
     }
 }
 
@@ -280,13 +315,15 @@ func onButtonUp() {
     buttonDown = false
     longPressWork?.cancel(); longPressWork = nil
     if pressConsumed || clickHandledOnDown || longPressFired || pressUsedForTurn { return }
-    guard cfg.mapped("click") else { return }
+    // No mapped-click guard here: the pending click must be scheduled even when
+    // click=none, both so double_click works with click unmapped and so
+    // log_events records the no-op dispatch.
     if cfg.mapped("double_click") {
-        let w = DispatchWorkItem { pendingClick = nil; run(cfg.action("click")) }
+        let w = DispatchWorkItem { pendingClick = nil; fire("click") }
         pendingClick = w
         DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(cfg.doubleClickMs), execute: w)
     } else {
-        run(cfg.action("click"))
+        fire("click")
     }
 }
 
@@ -324,8 +361,14 @@ let reportCallback: IOHIDReportCallback = { _, _, _, _, _, report, length in
         return
     }
     if rot != 0 { onRotate(rot) }
-    if btn == 1 && prevButton == 0 { onButtonDown() }
-    if btn == 0 && prevButton == 1 { onButtonUp() }
+    if btn == 1 && prevButton == 0 {
+        log(.debug, "event: button down") // raw edge: proves receipt even if nothing is mapped
+        onButtonDown()
+    }
+    if btn == 0 && prevButton == 1 {
+        log(.debug, "event: button up")
+        onButtonUp()
+    }
     prevButton = btn
 }
 
@@ -337,13 +380,13 @@ let knobMatched: IOHIDDeviceCallback = { _, _, _, device in
     let size = max((IOHIDDeviceGetProperty(device, kIOHIDMaxInputReportSizeKey as CFString) as? Int) ?? 64, 8)
     let buf = UnsafeMutablePointer<UInt8>.allocate(capacity: size)
     IOHIDDeviceRegisterInputReportCallback(device, buf, size, reportCallback, nil)
-    logErr("device connected: \(IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String ?? "?")")
+    log(.info, "device connected: \(IOHIDDeviceGetProperty(device, kIOHIDProductKey as CFString) as? String ?? "?")")
 }
 
 let knobRemoved: IOHIDDeviceCallback = { _, _, _, _ in
     // Unplugged mid-gesture: drop any half-tracked press so a replug starts clean.
     resetGestureState()
-    logErr("device disconnected.")
+    log(.info, "device disconnected.")
 }
 
 func listHID() {
@@ -367,14 +410,14 @@ func startKnob(vid: Int = GRIFFIN_VID, pid: Int = POWERMATE_PID) {
     IOHIDManagerScheduleWithRunLoop(mgr, CFRunLoopGetCurrent(), CFRunLoopMode.defaultMode.rawValue)
     let openRes = IOHIDManagerOpen(mgr, IOOptionBits(kIOHIDOptionsTypeNone))
     if openRes != kIOReturnSuccess {
-        logErr(String(format: "Could not open HID (0x%08x). Grant Input Monitoring: System Settings > Privacy & Security > Input Monitoring.", openRes))
+        log(.error, String(format: "Could not open HID (0x%08x). Grant Input Monitoring: System Settings > Privacy & Security > Input Monitoring.", openRes))
     }
     // Banners go to stderr: logErr is unbuffered, while print/stdout is
     // block-buffered when redirected to the launchd log file.
     if watchMode { logErr(String(format: "Watching VID=0x%04x PID=0x%04x — interact with the device. Ctrl-C to stop.", vid, pid)) }
     else {
         let dev = cfg.device.map { "\"\($0)\"" } ?? "the default output"
-        logErr("powermate v\(VERSION) active (target=\(dev)). turn_cw=\(cfg.action("turn_cw")) click=\(cfg.action("click")) … Ctrl-C to stop.")
+        log(.info, "powermate v\(VERSION) active (target=\(dev)). turn_cw=\(cfg.action("turn_cw")) click=\(cfg.action("click")) … Ctrl-C to stop.")
     }
     CFRunLoopRun()
 }
@@ -409,6 +452,21 @@ func selftest() -> Int {
           abs(c.step - 0.03) < 0.0001 && c.longPressMs == 500 && c.doubleClickMs == 250 && w.count == 3)
     c = Config(); w = parseConfig("long_press = output_cycle\ndouble_click_ms = 300\ndevice = Studio Display\n", into: c)
     check("valid settings apply", c.action("long_press") == "output_cycle" && c.doubleClickMs == 300 && c.device == "Studio Display")
+    c = Config(); w = parseConfig("log_level = debug\n", into: c)
+    check("log_level = debug parses", c.logLevel == .debug && w.isEmpty)
+    c = Config(); w = parseConfig("log_level = info\n", into: c)
+    check("log_level = info parses", c.logLevel == .info && w.isEmpty)
+    c = Config(); w = parseConfig("log_level = error\n", into: c)
+    check("log_level = error parses", c.logLevel == .error && w.isEmpty)
+    c = Config(); w = parseConfig("log_level = verbose\n", into: c)
+    check("bad log_level rejected, default info kept", c.logLevel == .info && !w.isEmpty)
+    // Filtering matrix — every message level against every configured level.
+    check("filter at error: error only",
+          shouldLog(.error, at: .error) && !shouldLog(.info, at: .error) && !shouldLog(.debug, at: .error))
+    check("filter at info: error + info, not debug",
+          shouldLog(.error, at: .info) && shouldLog(.info, at: .info) && !shouldLog(.debug, at: .info))
+    check("filter at debug: everything",
+          shouldLog(.error, at: .debug) && shouldLog(.info, at: .debug) && shouldLog(.debug, at: .debug))
     // Regression guard: the shipped example must parse clean and leave every
     // commented-out extra OFF.
     if let ex = try? String(contentsOfFile: "powermate.conf.example", encoding: .utf8) {
@@ -445,7 +503,9 @@ config: $POWERMATE_CONFIG or ~/.config/powermate/powermate.conf (optional —
   gestures: turn_cw turn_ccw click double_click long_press press_turn_cw press_turn_ccw
   actions:  volume_up volume_down mute_toggle play_pause next_track
             previous_track output_cycle none
-  settings: device  step  long_press_ms  double_click_ms
+  settings: device  step  long_press_ms  double_click_ms  log_level
+  log_level: error | info (default: + lifecycle) | debug (+ every event,
+             timestamped, with the action it resolved to — including none)
 env: POWERMATE_DEVICE (output-device name substring; overrides config)
 """
 

@@ -86,7 +86,10 @@ Override the location with `POWERMATE_CONFIG=/path/to/file`.
 `next_track` `previous_track` `output_cycle` `none`
 
 Settings: `device` (name substring, or `default`), `step` (volume per detent),
-`long_press_ms`, `double_click_ms`.
+`long_press_ms`, `double_click_ms`, `log_level` (`error` | `info` | `debug`;
+default `info`. At `debug`, every caught event is logged — timestamped, with
+the action it resolved to, **including `-> none`** — proving the driver saw a
+gesture even when it's a deliberate no-op. Set it back to `info` when done.)
 
 > **Click latency:** a plain `click` fires **instantly** as long as
 > `double_click`, `long_press`, and both `press_turn_*` are unmapped (the
@@ -189,6 +192,16 @@ These synthesize media keys; if they silently no-op, grant the binary
 **Accessibility** (System Settings → Privacy & Security → Accessibility) and
 restart the agent. Volume/mute/output actions use the audio API and aren't
 affected.
+
+**Is the driver even seeing my knob events?** Set `log_level = debug` in the
+config and restart the agent — every turn, click, double-click, long-press, and
+raw button edge is logged with a timestamp and the action it resolved to, even
+when that action is `none` (set it back to `info` when done):
+```
+14:02:11.482 event: button down
+14:02:11.483 event: click -> none
+14:02:13.170 event: turn_cw x3 -> volume_up
+```
 
 **Config changes aren't taking effect.** The config is read at startup only —
 restart the agent with the `kickstart` command above after editing. If a value
