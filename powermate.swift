@@ -27,7 +27,7 @@ import IOKit.hid
 import CoreAudio
 import AppKit
 
-let VERSION = "0.9.0"
+let VERSION = "0.9.1"
 let GRIFFIN_VID = 0x077d
 let POWERMATE_PID = 0x0410
 
