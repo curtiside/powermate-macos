@@ -5,7 +5,7 @@ BUILD     = build
 BIN       = $(BUILD)/powermate
 ID        = io.github.curtiside.powermate
 
-.PHONY: all build run list watch install uninstall setup-karabiner clean
+.PHONY: all build run list watch install uninstall config setup-karabiner clean
 
 all: build
 
@@ -36,6 +36,16 @@ install: build
 uninstall:
 	launchctl bootout gui/$(shell id -u) /Library/LaunchAgents/$(ID).plist 2>/dev/null || true
 	sudo rm -f /Library/LaunchAgents/$(ID).plist /usr/local/bin/powermate
+
+# Install the example config to ~/.config/powermate/ (won't overwrite an existing one).
+config:
+	@mkdir -p $(HOME)/.config/powermate
+	@if [ -e $(HOME)/.config/powermate/powermate.conf ]; then \
+		echo "exists: $(HOME)/.config/powermate/powermate.conf (left untouched)"; \
+	else \
+		install -m 644 powermate.conf.example $(HOME)/.config/powermate/powermate.conf; \
+		echo "installed: $(HOME)/.config/powermate/powermate.conf"; \
+	fi
 
 # Karabiner recipe: stop a device from hijacking your Mac volume.
 # make setup-karabiner KB="<vendor> <product> <label>"

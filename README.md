@@ -7,13 +7,18 @@ Griffin is long gone and the original PowerMate software is a dead kernel
 extension that won't load on current macOS — so a lot of people have a perfectly
 good knob that no longer does anything. This reads the PowerMate as a plain USB
 HID device in **userspace** (`IOHIDManager`) — no kext, no background bloat — and
-maps it to your audio volume:
+maps its gestures to built-in audio/media actions.
+
+Out of the box (no config needed):
 
 - **Turn** → volume up / down
 - **Press** → mute toggle
 
-By default it controls your **current default output device** (and follows you
-when you switch outputs), so it just works. ~200 lines of Swift, MIT licensed.
+And with an optional [config file](#gestures--config) you can also map **double-click**,
+**long-press**, and **press-and-turn** to actions like play/pause, next/previous
+track, and switching the output device. By default it controls your **current
+default output device** (and follows you when you switch outputs), so it just
+works. MIT licensed.
 
 ## Requirements
 - macOS 11 or later (universal binary)
@@ -40,14 +45,48 @@ launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate
 ```
 Uninstall with `make uninstall`.
 
-## Configure
+## Gestures & config
+
+All mappings live in a local config file. **If no config file exists, the
+defaults are exactly `turn = volume`, `click = mute`, everything else off** — the
+classic knob, no config required.
+
+```sh
+make config     # copies powermate.conf.example -> ~/.config/powermate/powermate.conf
+                # (won't overwrite an existing one)
+```
+Edit it and restart the agent: `launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate`.
+Override the location with `POWERMATE_CONFIG=/path/to/file`.
+
+**Gestures** (config keys): `turn_cw` `turn_ccw` `click` `double_click`
+`long_press` `press_turn_cw` `press_turn_ccw`
+
+**Actions** (values): `volume_up` `volume_down` `mute_toggle` `play_pause`
+`next_track` `previous_track` `output_cycle` `none`
+
+Settings: `device` (name substring, or `default`), `step` (volume per detent),
+`long_press_ms`, `double_click_ms`.
+
+> **Click latency:** a plain `click` fires **instantly** as long as
+> `double_click`, `long_press`, and both `press_turn_*` are unmapped (the
+> default). Mapping any of those forces the tool to wait briefly to tell a single
+> click apart from a double / hold / press-and-turn, so the click action gets a
+> small delay. Map them only if you want them.
+
+> **Permissions:** `volume_*`, `mute_toggle`, and `output_cycle` use the CoreAudio
+> API and need only Input Monitoring. `play_pause` / `next_track` /
+> `previous_track` synthesize media keys and may prompt for **Accessibility**
+> the first time they fire.
+
+You can also pin the target device without a config file via env vars (handy in
+the plist's `EnvironmentVariables`):
+
 | Env var | Meaning | Default |
 |---|---|---|
+| `POWERMATE_CONFIG` | path to the config file | `~/.config/powermate/powermate.conf` |
 | `POWERMATE_DEVICE` | output device name substring to control | current default output |
-| `POWERMATE_STEP` | volume change per detent (0.0–1.0) | `0.03` |
 
 e.g. pin it to specific speakers: `POWERMATE_DEVICE="Studio Display" make run`.
-Add these to the plist's `EnvironmentVariables` for the installed agent.
 
 ## Other modes
 ```sh

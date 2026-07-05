@@ -1,0 +1,46 @@
+# powermate configuration — example
+#
+# Copy to ~/.config/powermate/powermate.conf and edit, then restart the agent:
+#   mkdir -p ~/.config/powermate
+#   cp powermate.conf.example ~/.config/powermate/powermate.conf
+#   launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate
+#
+# With NO config file present, the built-in defaults are exactly the lines shown
+# uncommented below (turn = volume, click = mute, everything else = none) — so
+# the classic volume-knob behavior needs no config at all. A plain click fires
+# instantly UNLESS you map double_click / long_press / press_turn_* (any of those
+# forces the tool to wait to disambiguate, adding a small delay to the click).
+#
+# Format: one "key = value" per line. "#" starts a comment.
+
+# ---- Settings --------------------------------------------------------------
+# device: substring of the output device name to control. "default" (or unset)
+#         follows the current default output. POWERMATE_DEVICE env overrides.
+device = default
+# step: volume change per rotation detent (0.0–1.0). Scaled by turn velocity.
+step = 0.03
+# timing windows for the advanced click gestures (milliseconds).
+long_press_ms = 500
+double_click_ms = 250
+
+# ---- Gesture -> action mappings --------------------------------------------
+# Gestures: turn_cw  turn_ccw  click  double_click  long_press
+#           press_turn_cw  press_turn_ccw
+# Actions:  volume_up  volume_down  mute_toggle  play_pause  next_track
+#           previous_track  output_cycle  none
+#
+# Notes:
+#   - volume_up/volume_down/mute_toggle/output_cycle use the CoreAudio API and
+#     need only Input Monitoring (already required to read the knob).
+#   - play_pause/next_track/previous_track synthesize media keys and may prompt
+#     for Accessibility permission the first time they fire.
+
+turn_cw   = volume_up
+turn_ccw  = volume_down
+click     = mute_toggle
+
+# Opt-in extras — uncomment to enable (adds a small click delay, see above):
+# double_click   = play_pause
+# long_press     = output_cycle
+# press_turn_cw  = next_track
+# press_turn_ccw = previous_track
