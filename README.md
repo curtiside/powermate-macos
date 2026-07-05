@@ -20,6 +20,12 @@ track, and switching the output device. By default it controls your **current
 default output device** (and follows you when you switch outputs), so it just
 works. MIT licensed.
 
+## Supported hardware
+This targets the **USB (wired) PowerMate** — Griffin VID `0x077d` / PID `0x0410`,
+which macOS enumerates as a USB HID device. The later **Bluetooth PowerMate is a
+BLE device, not USB HID, and is not supported** here (it needs a completely
+different CoreBluetooth input path). Contributions welcome if you have one to test.
+
 ## Requirements
 - macOS 11 or later (universal binary)
 - Xcode Command Line Tools (`swiftc`) to build
