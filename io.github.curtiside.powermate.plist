@@ -14,5 +14,11 @@
 	<string>Background</string>
 	<key>ThrottleInterval</key>
 	<integer>10</integer>
+	<!-- __HOME__ is replaced with $HOME by `make install` (launchd does not
+	     expand ~). Without these, all diagnostics vanish into launchd. -->
+	<key>StandardOutPath</key>
+	<string>__HOME__/Library/Logs/powermate.log</string>
+	<key>StandardErrorPath</key>
+	<string>__HOME__/Library/Logs/powermate.log</string>
 </dict>
 </plist>

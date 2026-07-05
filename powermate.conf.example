@@ -17,9 +17,11 @@
 # device: substring of the output device name to control. "default" (or unset)
 #         follows the current default output. POWERMATE_DEVICE env overrides.
 device = default
-# step: volume change per rotation detent (0.0–1.0). Scaled by turn velocity.
+# step: volume change per rotation detent. Must be in (0, 1]. Scaled by turn
+#       velocity. Out-of-range values are rejected (warning in the log).
 step = 0.03
 # timing windows for the advanced click gestures (milliseconds).
+# long_press_ms: 100–5000. double_click_ms: 100–2000. Out-of-range rejected.
 long_press_ms = 500
 double_click_ms = 250
 
@@ -34,6 +36,10 @@ double_click_ms = 250
 #     need only Input Monitoring (already required to read the knob).
 #   - play_pause/next_track/previous_track synthesize media keys and may prompt
 #     for Accessibility permission the first time they fire.
+#   - output_cycle skips virtual sinks (Zoom/Teams loopbacks) and logs the
+#     device it switched to (~/Library/Logs/powermate.log).
+#   - typos are safe: unknown keys/actions are warned about in the log and
+#     ignored — they never activate a gesture or add click latency.
 
 turn_cw   = volume_up
 turn_ccw  = volume_down

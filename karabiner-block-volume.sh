@@ -26,9 +26,18 @@ set -e
 
 VID="$1"; PID="$2"; LABEL="${3:-device $1/$2}"
 [ -n "$VID" ] && [ -n "$PID" ] || {
-  echo "usage: $0 <vendor_id> <product_id> [\"label\"]   (decimal IDs; see 'powermate --list')" >&2
+  echo "usage: $0 <vendor_id> <product_id> [\"label\"]   (decimal or 0x-hex; see 'powermate --list')" >&2
   exit 2
 }
+
+# Accept 0x-hex (what `powermate --list` prints first) and normalize to decimal.
+norm() { case "$1" in 0[xX]*) printf '%d' "$(($1))" ;; *) printf '%s' "$1" ;; esac; }
+VID="$(norm "$VID")"; PID="$(norm "$PID")"
+case "$VID$PID" in
+  ''|*[!0-9]*)
+    echo "error: vendor/product IDs must be numbers — decimal (2830) or hex (0x0b0e)." >&2
+    exit 2 ;;
+esac
 
 KDIR="$HOME/.config/karabiner"
 KJSON="$KDIR/karabiner.json"
@@ -61,7 +70,10 @@ jq --argjson rule "$RULE" --argjson vid "$VID" --argjson pid "$PID" '
   | (($root.profiles | map(.selected) | index(true)) // 0) as $pi
   | .profiles[$pi].complex_modifications.rules =
       (((.profiles[$pi].complex_modifications.rules) // [])
-       | if (map(.description) | index($rule.description)) == null then . + [ $rule ] else . end)
+       # dedup by the (vid/pid) suffix, not the full description — re-running
+       # with a different label must not stack a second copy of the rule
+       | if any(.[]; (.description // "") | endswith("(\($vid)/\($pid))"))
+         then . else . + [ $rule ] end)
   | .profiles[$pi].devices =
       (((.profiles[$pi].devices) // [])
        | if any(.identifiers.vendor_id == $vid and .identifiers.product_id == $pid)

@@ -53,11 +53,15 @@ Monitoring** → add your terminal (for `make run`) or `/usr/local/bin/powermate
 ```sh
 make install
 ```
-Installs `/usr/local/bin/powermate` + a LaunchAgent so the knob works at every
-login. Grant Input Monitoring to `/usr/local/bin/powermate`, then:
+Installs `/usr/local/bin/powermate` (`sudo` is needed only for that) + a
+**per-user** LaunchAgent in `~/Library/LaunchAgents` so the knob works at every
+login. The agent logs to `~/Library/Logs/powermate.log`. Grant Input Monitoring
+to `/usr/local/bin/powermate`, then:
 ```sh
 launchctl kickstart -k gui/$(id -u)/io.github.curtiside.powermate
 ```
+(Upgrading from an older version that installed the agent for all users in
+`/Library/LaunchAgents`? `make install` migrates it automatically.)
 Uninstall with `make uninstall` (removes the binary and LaunchAgent; your config
 at `~/.config/powermate/` is left in place — `rm -rf ~/.config/powermate` to
 remove it too).
@@ -95,6 +99,12 @@ Settings: `device` (name substring, or `default`), `step` (volume per detent),
 > `previous_track` synthesize media keys and may prompt for **Accessibility**
 > the first time they fire.
 
+Notes: `output_cycle` skips virtual sinks (Zoom/Teams-style loopback devices)
+and logs each switch to `~/Library/Logs/powermate.log`; AirPlay and aggregate
+devices are included. Config typos are safe — unknown keys, unknown actions, and
+out-of-range values are warned about in the log and ignored (they never activate
+a gesture or add click latency), and the config is validated by `make test`.
+
 You can also pin the target device without a config file via env vars (handy in
 the plist's `EnvironmentVariables`):
 
@@ -109,6 +119,11 @@ e.g. pin it to specific speakers: `POWERMATE_DEVICE="Studio Display" make run`.
 ```sh
 make list         # list HID devices (find your knob or other devices' VID/PID)
 make watch        # print the knob's raw HID reports (debug)
+make test         # run the built-in config-parser self-tests
+powermate --watch 0x0b0e 0x2e50   # watch ANOTHER device's raw reports
+                                  # (VID PID — decimal or 0x-hex; great for
+                                  # catching a dongle sending volume events)
+powermate --version
 ```
 For reference, the PowerMate's input report is `[button, signed-rotation, …]`
 (byte 0 = button 0/1, byte 1 = signed rotation delta).
@@ -127,9 +142,10 @@ and `jq`) makes Karabiner swallow that device's volume events so they stop movin
 your output:
 
 ```sh
-# find the device's vendor/product IDs (decimal):
+# find the device's vendor/product IDs:
 make list
-# then block its volume events (example: Jabra Link 390 = 2830 / 11856):
+# then block its volume events — decimal or 0x-hex both work
+# (example: Jabra Link 390 = 2830/11856 = 0x0b0e/0x2e50):
 make setup-karabiner KB="2830 11856 Jabra Link 390"
 ```
 
@@ -142,6 +158,13 @@ audio API (not volume keys), so blocking a device's volume keys **doesn't** affe
 the knob — you get a real volume knob *and* no more surprise volume jumps.
 
 ## Troubleshooting
+
+**First stop: the log.** The installed agent writes everything (connects,
+disconnects, config warnings, permission hints, `output_cycle` switches) to
+`~/Library/Logs/powermate.log`:
+```sh
+tail -f ~/Library/Logs/powermate.log
+```
 
 **`make list` / `make watch` doesn't show the knob at all.** The PowerMate is a
 **USB 1.1** device and is surprisingly picky about which port or hub it enumerates
@@ -168,7 +191,15 @@ restart the agent. Volume/mute/output actions use the audio API and aren't
 affected.
 
 **Config changes aren't taking effect.** The config is read at startup only —
-restart the agent with the `kickstart` command above after editing.
+restart the agent with the `kickstart` command above after editing. If a value
+looks ignored, check the log: unknown keys/actions and out-of-range values are
+warned about and skipped.
+
+**The knob stopped working after updating from source.** The binary is ad-hoc
+signed, so its signature changes on every rebuild — macOS may silently drop the
+old **Input Monitoring** grant. Open System Settings → Privacy & Security →
+Input Monitoring, remove `/usr/local/bin/powermate` (−), re-add it (+), then
+`kickstart` the agent.
 
 ## How it works / why no kext
 `IOHIDManager` opens the PowerMate (Griffin VID `0x077d`, PID `0x0410`) in
